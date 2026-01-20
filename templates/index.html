@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Titanic Survival Prediction System</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🚢 Titanic Survival Prediction System</h1>
+            <p>Predict passenger survival using machine learning</p>
+        </header>
+
+        <div class="card">
+            <div class="info-banner">
+                <p><strong>About the Titanic:</strong> On April 15, 1912, the RMS Titanic sank after hitting an iceberg. 
+                This system uses machine learning to predict survival based on passenger characteristics.</p>
+            </div>
+
+            <form id="predictionForm">
+                <h2>Enter Passenger Details</h2>
+                
+                <div class="form-grid">
+                    <!-- Passenger Class -->
+                    <div class="form-group">
+                        <label for="pclass">
+                            Passenger Class
+                            <span class="tooltip">?
+                                <span class="tooltiptext">1st = Upper class, 2nd = Middle class, 3rd = Lower class</span>
+                            </span>
+                        </label>
+                        <select id="pclass" name="pclass" required>
+                            <option value="1">1st Class (Upper)</option>
+                            <option value="2">2nd Class (Middle)</option>
+                            <option value="3" selected>3rd Class (Lower)</option>
+                        </select>
+                    </div>
+
+                    <!-- Sex -->
+                    <div class="form-group">
+                        <label for="sex">
+                            Sex
+                            <span class="tooltip">?
+                                <span class="tooltiptext">Gender of the passenger</span>
+                            </span>
+                        </label>
+                        <select id="sex" name="sex" required>
+                            <option value="male" selected>Male</option>
+                            <option value="female">Female</option>
+                        </select>
+                    </div>
+
+                    <!-- Age -->
+                    <div class="form-group">
+                        <label for="age">
+                            Age (years)
+                            <span class="tooltip">?
+                                <span class="tooltiptext">Age of the passenger in years</span>
+                            </span>
+                        </label>
+                        <input 
+                            type="number" 
+                            id="age" 
+                            name="age" 
+                            min="0" 
+                            max="100" 
+                            step="0.5"
+                            value="30" 
+                            required
+                        >
+                    </div>
+
+                    <!-- Fare -->
+                    <div class="form-group">
+                        <label for="fare">
+                            Fare (£)
+                            <span class="tooltip">?
+                                <span class="tooltiptext">Ticket fare in British Pounds</span>
+                            </span>
+                        </label>
+                        <input 
+                            type="number" 
+                            id="fare" 
+                            name="fare" 
+                            min="0" 
+                            step="0.01"
+                            value="30.00" 
+                            required
+                        >
+                    </div>
+
+                    <!-- Port of Embarkation -->
+                    <div class="form-group full-width">
+                        <label for="embarked">
+                            Port of Embarkation
+                            <span class="tooltip">?
+                                <span class="tooltiptext">Where the passenger boarded the ship</span>
+                            </span>
+                        </label>
+                        <select id="embarked" name="embarked" required>
+                            <option value="C">Cherbourg, France</option>
+                            <option value="Q">Queenstown, Ireland</option>
+                            <option value="S" selected>Southampton, England</option>
+                        </select>
+                    </div>
+                </div>
+
+                <button type="submit" class="btn-predict">
+                    <span id="buttonText">Predict Survival</span>
+                    <span id="loadingSpinner" class="spinner" style="display: none;"></span>
+                </button>
+            </form>
+
+            <!-- Result Display -->
+            <div id="result" class="result" style="display: none;">
+                <div class="result-header">
+                    <h2>Prediction Result</h2>
+                </div>
+                
+                <div class="prediction-outcome" id="outcomeBox">
+                    <div class="outcome-icon" id="outcomeIcon">⚓</div>
+                    <div class="outcome-text" id="outcomeText">Survived</div>
+                </div>
+
+                <div class="probability-section">
+                    <h3>Survival Probability</h3>
+                    <div class="probability-bars">
+                        <div class="prob-item">
+                            <div class="prob-label">
+                                <span>Survival</span>
+                                <span id="survivalProb" class="prob-value">0%</span>
+                            </div>
+                            <div class="prob-bar">
+                                <div id="survivalBar" class="prob-fill survival"></div>
+                            </div>
+                        </div>
+                        <div class="prob-item">
+                            <div class="prob-label">
+                                <span>Death</span>
+                                <span id="deathProb" class="prob-value">0%</span>
+                            </div>
+                            <div class="prob-bar">
+                                <div id="deathBar" class="prob-fill death"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="passenger-summary">
+                    <h3>Passenger Profile</h3>
+                    <div id="passengerInfo"></div>
+                </div>
+
+                <p class="disclaimer">
+                    This prediction is based on historical patterns from the Titanic dataset using a Random Forest Classifier.
+                </p>
+            </div>
+
+            <!-- Error Display -->
+            <div id="error" class="error" style="display: none;">
+                <strong>⚠ Error:</strong> <span id="errorMessage"></span>
+            </div>
+        </div>
+
+        <footer>
+            <p>Built with Flask & Random Forest Classifier | Model Persistence: Joblib</p>
+            <p class="small">Dataset: Kaggle Titanic - Machine Learning from Disaster</p>
+        </footer>
+    </div>
+
+    <script>
+        const form = document.getElementById('predictionForm');
+        const resultDiv = document.getElementById('result');
+        const errorDiv = document.getElementById('error');
+        const errorMessage = document.getElementById('errorMessage');
+        const buttonText = document.getElementById('buttonText');
+        const loadingSpinner = document.getElementById('loadingSpinner');
+
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            // Hide previous results
+            resultDiv.style.display = 'none';
+            errorDiv.style.display = 'none';
+
+            // Show loading state
+            buttonText.style.display = 'none';
+            loadingSpinner.style.display = 'inline-block';
+
+            try {
+                const formData = new FormData(form);
+                const response = await fetch('/predict', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    displayResult(data);
+                } else {
+                    errorMessage.textContent = data.error || 'An unknown error occurred';
+                    errorDiv.style.display = 'block';
+                }
+            } catch (error) {
+                errorMessage.textContent = 'Failed to connect to server. Please try again.';
+                errorDiv.style.display = 'block';
+            } finally {
+                // Reset button state
+                buttonText.style.display = 'inline';
+                loadingSpinner.style.display = 'none';
+            }
+        });
+
+        function displayResult(data) {
+            // Update outcome
+            const outcomeBox = document.getElementById('outcomeBox');
+            const outcomeIcon = document.getElementById('outcomeIcon');
+            const outcomeText = document.getElementById('outcomeText');
+            
+            if (data.prediction === 1) {
+                outcomeBox.className = 'prediction-outcome survived';
+                outcomeIcon.textContent = '✓';
+                outcomeText.textContent = 'Survived';
+            } else {
+                outcomeBox.className = 'prediction-outcome died';
+                outcomeIcon.textContent = '✗';
+                outcomeText.textContent = 'Did Not Survive';
+            }
+
+            // Update probabilities
+            document.getElementById('survivalProb').textContent = data.survival_probability.toFixed(1) + '%';
+            document.getElementById('deathProb').textContent = data.death_probability.toFixed(1) + '%';
+            
+            document.getElementById('survivalBar').style.width = data.survival_probability + '%';
+            document.getElementById('deathBar').style.width = data.death_probability + '%';
+
+            // Update passenger info
+            const info = data.passenger_info;
+            const classNames = {1: '1st Class (Upper)', 2: '2nd Class (Middle)', 3: '3rd Class (Lower)'};
+            const portNames = {C: 'Cherbourg, France', Q: 'Queenstown, Ireland', S: 'Southampton, England'};
+            
+            document.getElementById('passengerInfo').innerHTML = `
+                <p><strong>Class:</strong> ${classNames[info.class]}</p>
+                <p><strong>Sex:</strong> ${info.sex.charAt(0).toUpperCase() + info.sex.slice(1)}</p>
+                <p><strong>Age:</strong> ${info.age} years</p>
+                <p><strong>Fare:</strong> ${info.fare}</p>
+                <p><strong>Embarked:</strong> ${portNames[info.embarked]}</p>
+            `;
+
+            // Show result
+            resultDiv.style.display = 'block';
+            resultDiv.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }
+    </script>
+</body>
+</html>
