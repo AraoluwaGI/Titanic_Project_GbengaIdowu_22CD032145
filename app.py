@@ -7,11 +7,12 @@ import os
 # Initialize Flask app
 app = Flask(__name__)
 
-# Load the trained model and encoders
-MODEL_PATH = os.path.join('model', 'titanic_survival_model.pkl')
-SEX_ENCODER_PATH = os.path.join('model', 'sex_encoder.pkl')
-EMBARKED_ENCODER_PATH = os.path.join('model', 'embarked_encoder.pkl')
-SCALER_PATH = os.path.join('model', 'scaler.pkl')
+# Load the trained model and encoders with robust path handling
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+MODEL_PATH = os.path.join(BASE_DIR, 'model', 'titanic_survival_model.pkl')
+SEX_ENCODER_PATH = os.path.join(BASE_DIR, 'model', 'sex_encoder.pkl')
+EMBARKED_ENCODER_PATH = os.path.join(BASE_DIR, 'model', 'embarked_encoder.pkl')
+SCALER_PATH = os.path.join(BASE_DIR, 'model', 'scaler.pkl')
 
 try:
     model = joblib.load(MODEL_PATH)
@@ -40,14 +41,26 @@ def predict():
                 'error': 'Model not loaded properly. Please check server logs.'
             }), 500
 
-        # Get input data from the form
-        pclass = int(request.form['pclass'])
-        sex = request.form['sex']
-        age = float(request.form['age'])
-        fare = float(request.form['fare'])
-        embarked = request.form['embarked']
+        # Get input data from the form with safer access
+        pclass_raw = request.form.get('pclass')
+        sex = request.form.get('sex')
+        age_raw = request.form.get('age')
+        fare_raw = request.form.get('fare')
+        embarked = request.form.get('embarked')
 
-        # Validate inputs
+        # Check for missing fields
+        if None in [pclass_raw, sex, age_raw, fare_raw, embarked]:
+            return jsonify({'error': 'All fields are required'}), 400
+
+        # Convert and validate inputs
+        try:
+            pclass = int(pclass_raw)
+            age = float(age_raw)
+            fare = float(fare_raw)
+        except ValueError:
+            return jsonify({'error': 'Invalid numeric input'}), 400
+
+        # Validate input ranges
         if pclass not in [1, 2, 3]:
             return jsonify({'error': 'Passenger Class must be 1, 2, or 3'}), 400
         
@@ -56,6 +69,12 @@ def predict():
         
         if fare < 0:
             return jsonify({'error': 'Fare cannot be negative'}), 400
+
+        if sex not in ['male', 'female']:
+            return jsonify({'error': 'Sex must be male or female'}), 400
+
+        if embarked not in ['C', 'Q', 'S']:
+            return jsonify({'error': 'Embarked must be C, Q, or S'}), 400
 
         # Encode categorical variables
         try:
@@ -115,4 +134,7 @@ def health():
 if __name__ == '__main__':
     # Run the app
     port = int(os.environ.get('PORT', 5000))
-    app.run(host='0.0.0.0', port=port, debug=True)
+    # Use environment variable to control debug mode
+    # In production (Render), this will be False by default
+    debug = os.environ.get('FLASK_DEBUG', '0') == '1'
+    app.run(host='0.0.0.0', port=port, debug=debug)
